@@ -1,61 +1,69 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
+<meta charset="utf-8">
 
-    <meta name="viewport"
-          content="width=device-width,user-scalable=no">
+<meta name="viewport" content="width=device-width,user-scalable=no">
 
-    <!-- MindAR + A-Frame -->
-    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<!-- A-Frame -->
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+
+<!-- MindAR -->
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
 </head>
+<body style="margin:0;overflow:hidden">
 
-<body style="margin:0; overflow:hidden">
-
-<!-- ОБЯЗАТЕЛЬНО — прямой пользовательский клик -->
-<button id="startAR"
-        style="position:absolute;z-index:999;
-               width:100%;height:70px;font-size:20px;">
+<!-- Кнопка старта -->
+<button id="startAR" style="height:60px;width:100%;font-size:20px">
 START AR
 </button>
 
+<!-- Контроллер -->
+<div id="controls"
+style="display:none;
+position:absolute;
+bottom:10px;
+width:100%;
+z-index:10;
+text-align:center">
+
+<button id="move-btn">Move</button>
+<button id="rotate-btn">Rotate</button>
+<button id="scale-btn">Scale</button>
+<button id="reset-btn">Reset</button>
+
+</div>
+
+<!-- Сцена -->
 <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false"
-    embedded
-    vr-mode-ui="enabled:false"
-    device-orientation-permission-ui="enabled:false">
+id="ar-scene"
+mindar-image="imageTargetSrc: targets.mind; autoStart:false"
+embedded
+vr-mode-ui="enabled:false"
+device-orientation-permission-ui="enabled:false">
 
-    <a-camera></a-camera>
+<a-camera></a-camera>
 
-    <a-entity id="target"
-              mindar-image-target="targetIndex: 0">
+<a-entity
+id="model"
+mindar-image-target="targetIndex:0">
 
-        <a-box position="0 0 0" color="orange"></a-box>
+<a-gltf-model
+src="model.glb"
+scale="0.1 0.1 0.1"
+position="0 0 0">
+</a-gltf-model>
 
-    </a-entity>
+</a-entity>
+
+<a-sound id="detSound" src="detection.mp3"></a-sound>
+<a-sound id="clickSound" src="click.mp3"></a-sound>
 
 </a-scene>
 
-<script>
-document.getElementById("startAR").onclick = async () => {
-
-    /* единственный корректный способ запуска */
-
-    const scene = document.querySelector("a-scene");
-    const arSystem = scene.systems["mindar-image-system"];
-
-    try {
-        await arSystem.start();
-        document.getElementById("startAR").remove();
-        console.log("✅ CAMERA STARTED");
-
-    } catch(e){
-        alert("❌ CAMERA ERROR:\n" + e.message);
-        console.error(e);
-    }
-}
-</script>
+<script src="app.js"></script>
+<script src="scene.js"></script>
 
 </body>
 </html>
