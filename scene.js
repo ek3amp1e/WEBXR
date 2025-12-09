@@ -1,125 +1,76 @@
-document.addEventListener('DOMContentLoaded', () => {
+const model = document.getElementById("model");
 
-  const scene = document.querySelector('a-scene');
-  const model = document.getElementById('model-container');
-  const ring = document.getElementById('interaction-ring');
+const moveBtn   = document.getElementById("move-btn");
+const rotBtn    = document.getElementById("rotate-btn");
+const scaleBtn  = document.getElementById("scale-btn");
+const resetBtn  = document.getElementById("reset-btn");
 
-  const moveBtn   = document.getElementById('move-btn');
-  const rotateBtn = document.getElementById('rotate-btn');
-  const scaleBtn  = document.getElementById('scale-btn');
-  const resetBtn  = document.getElementById('reset-btn');
+let mode="move";
+let isDrag=false;
+let x=0,y=0;
 
-  let currentMode = "move";
-  let dragging = false;
-  let startX, startY;
+moveBtn.onclick=()=>setMode("move");
+rotBtn.onclick=()=>setMode("rotate");
+scaleBtn.onclick=()=>setMode("scale");
+resetBtn.onclick=resetModel;
 
-  // ===================
-  // AR events
-  // ===================
-  scene.addEventListener("mindar-target-found", () => {
-    document.getElementById('detection-sound').components.sound.playSound();
+function setMode(m){
+    mode=m;
+    document.getElementById("clickSound").components.sound.playSound();
+}
 
-    ring.setAttribute("visible", true);
-    ring.setAttribute("animation", {
-      property: "opacity",
-      from: 0.3,
-      to: 0.7,
-      dur: 1000,
-      loop: true,
-      dir: "alternate"
-    });
-  });
+model.addEventListener("touchstart",start);
+model.addEventListener("touchmove",move);
+model.addEventListener("touchend",stop);
 
-  scene.addEventListener("mindar-target-lost", () => {
-    ring.setAttribute("visible", false);
-  });
+model.addEventListener("mousedown",start);
+document.addEventListener("mousemove",move);
+document.addEventListener("mouseup",stop);
 
-  // ===================
-  // Buttons
-  // ===================
-  moveBtn.onclick   = () => setMode("move");
-  rotateBtn.onclick = () => setMode("rotate");
-  scaleBtn.onclick  = () => setMode("scale");
-  resetBtn.onclick  = resetModel;
+function start(e){
+    isDrag=true;
+    const p = e.touches ? e.touches[0] : e;
+    x=p.clientX;
+    y=p.clientY;
+}
 
-  function setMode(m) {
-    currentMode = m;
-    document.querySelectorAll(".control-btn")
-      .forEach(b => b.classList.remove("active"));
+function move(e){
+    if(!isDrag) return;
 
-    document.getElementById(`${m}-btn`)
-      .classList.add("active");
-  }
+    const p = e.touches ? e.touches[0] : e;
 
-  // ===================
-  // Touch + mouse
-  // ===================
-  model.addEventListener("touchstart", start, { passive:false });
-  model.addEventListener("touchmove", move, { passive:false });
-  model.addEventListener("touchend", stop);
+    let dx = p.clientX-x;
+    let dy = p.clientY-y;
 
-  model.addEventListener("mousedown", start);
-  document.addEventListener("mousemove", move);
-  document.addEventListener("mouseup", stop);
+    const pos = model.getAttribute("position");
+    const rot = model.getAttribute("rotation");
+    const sc  = model.getAttribute("scale");
 
-  function start(e) {
-    e.preventDefault();
-    dragging = true;
-
-    const t = e.touches ? e.touches[0] : e;
-    startX = t.clientX;
-    startY = t.clientY;
-  }
-
-  function move(e) {
-    if (!dragging) return;
-    e.preventDefault();
-
-    const t = e.touches ? e.touches[0] : e;
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-
-    const p = model.getAttribute("position");
-    const r = model.getAttribute("rotation");
-    const s = model.getAttribute("scale");
-
-    const k = 0.01;
-
-    if (currentMode === "move") {
-      model.setAttribute("position", {
-        x: p.x + dx*k,
-        y: p.y - dy*k,
-        z: p.z
-      });
+    if(mode==="move"){
+        model.setAttribute("position",
+            `${pos.x+dx*0.01} ${pos.y-dy*0.01} ${pos.z}`);
     }
 
-    if (currentMode === "rotate") {
-      model.setAttribute("rotation", {
-        x: r.x + dy*k*50,
-        y: r.y + dx*k*50,
-        z: r.z
-      });
+    if(mode==="rotate"){
+        model.setAttribute("rotation",
+            `${rot.x+dy} ${rot.y+dx} ${rot.z}`);
     }
 
-    if (currentMode === "scale") {
-      const ns = Math.max(0.05, s.x * (1 + dy*k));
-      model.setAttribute("scale", `${ns} ${ns} ${ns}`);
+    if(mode==="scale"){
+        let s = Math.max(0.05,sc.x*(1+dy*0.01));
+        model.setAttribute("scale",`${s} ${s} ${s}`);
     }
 
-    startX = t.clientX;
-    startY = t.clientY;
-  }
+    x=p.clientX;
+    y=p.clientY;
+}
 
-  function stop() {
-    dragging = false;
-    document.getElementById('interaction-sound').components.sound.playSound();
-  }
+function stop(){
+    isDrag=false;
+}
 
-  function resetModel() {
-    model.setAttribute("position", "0 0 0");
-    model.setAttribute("rotation", "0 0 0");
-    model.setAttribute("scale", "0.1 0.1 0.1");
-    setMode("move");
-  }
-
-});
+function resetModel(){
+    model.setAttribute("position","0 0 0");
+    model.setAttribute("rotation","0 0 0");
+    model.setAttribute("scale","0.1 0.1 0.1");
+}
