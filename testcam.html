@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AR Camera with GLB Model</title>
+    <title>AR Camera with GLB Model on Marker</title>
     <style>
         body { 
             margin: 0; 
@@ -20,7 +20,6 @@
             text-align: center;
             z-index: 100;
             max-width: 80%;
-            display: none;
         }
         #loading {
             position: absolute;
@@ -44,7 +43,31 @@
             cursor: pointer;
             z-index: 100;
         }
-        #canvas {
+        #markerInfo {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            max-width: 90%;
+        }
+        #markerImage {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            border: 2px solid white;
+            border-radius: 10px;
+            z-index: 100;
+            display: none;
+        }
+        canvas {
             position: absolute;
             top: 0;
             left: 0;
@@ -52,64 +75,88 @@
             height: 100%;
             z-index: 1;
         }
-        #video {
+        video {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             z-index: 0;
+            transform: scaleX(-1); /* Зеркальное отображение для фронтальной камеры */
         }
     </style>
 </head>
 <body>
 
-<button id="startButton">START CAMERA</button>
-<div id="info">Нажмите на экран чтобы разместить модель</div>
-<div id="loading">Загрузка модели...</div>
+<button id="startButton">START AR CAMERA</button>
+<div id="info">Наведите камеру на маркер</div>
+<div id="loading">Загрузка...</div>
+<div id="markerInfo">Маркер не обнаружен</div>
+<img id="markerImage" src="" alt="Маркер">
 
 <video id="video" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
 
+<!-- Подключаем необходимые библиотеки -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!-- AR.js библиотека для работы с маркерами -->
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar.js"></script>
 
 <script>
 let camera, scene, renderer;
 let video, videoTexture;
 let model = null;
-let modelPlaced = false;
-let isDragging = false;
-let previousMousePosition = { x: 0, y: 0 };
+let markerControls = null;
+let arToolkitSource, arToolkitContext;
+let markerFound = false;
 
 // Элементы DOM
 const startButton = document.getElementById('startButton');
 const infoElement = document.getElementById('info');
 const loadingElement = document.getElementById('loading');
+const markerInfoElement = document.getElementById('markerInfo');
+const markerImageElement = document.getElementById('markerImage');
 const videoElement = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 
-// Начало работы с камерой
+// URL маркера (замените на свой)
+const MARKER_PATTERN_URL = './pattern-marker.patt';
+// URL изображения маркера для отображения
+const MARKER_IMAGE_URL = './pattern-marker.patt';
+
+// Начало работы с AR камерой
 async function startCamera() {
     try {
         startButton.style.display = 'none';
         loadingElement.style.display = 'block';
+        markerImageElement.src = MARKER_IMAGE_URL;
+        markerImageElement.style.display = 'block';
         
         // Запрос доступа к камере
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } }
-        });
+        const constraints = {
+            video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        };
         
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         videoElement.srcObject = stream;
         
         // Ждем, пока видео будет готово
-        videoElement.onloadedmetadata = () => {
-            initThreeJS();
-            loadingElement.style.display = 'none';
-            infoElement.style.display = 'block';
-            loadGLBModel();
-        };
+        await new Promise((resolve) => {
+            videoElement.onloadedmetadata = () => {
+                videoElement.play();
+                resolve();
+            };
+        });
+        
+        initAR();
+        loadGLBModel();
         
     } catch(e) {
         alert("Ошибка: " + e.name + " : " + e.message);
@@ -118,29 +165,64 @@ async function startCamera() {
     }
 }
 
-// Инициализация Three.js
-function initThreeJS() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    
+// Инициализация AR
+function initAR() {
     // Создаем сцену
     scene = new THREE.Scene();
     
-    // Создаем камеру (перспективная)
-    camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 5);
+    // Создаем камеру
+    camera = new THREE.Camera();
+    scene.add(camera);
     
     // Создаем рендерер
     renderer = new THREE.WebGLRenderer({ 
         canvas: canvas,
         alpha: true,
-        antialias: true 
+        antialias: true,
+        antialias: true
     });
-    renderer.setSize(width, height);
+    renderer.setClearColor(new THREE.Color('lightgrey'), 0);
+    renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     
+    // Настройка AR источника
+    arToolkitSource = new THREEx.ArToolkitSource({
+        sourceType: 'webcam',
+        sourceWidth: videoElement.videoWidth,
+        sourceHeight: videoElement.videoHeight,
+        displayWidth: window.innerWidth,
+        displayHeight: window.innerHeight
+    });
+    
+    arToolkitSource.init(function() {
+        setTimeout(function() {
+            onResize();
+        }, 2000);
+    });
+    
+    // Настройка AR контекста
+    arToolkitContext = new THREEx.ArToolkitContext({
+        cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/three.js/examples/vendor/ar.js/data/camera_para.dat',
+        detectionMode: 'mono',
+        maxDetectionRate: 30,
+        canvasWidth: videoElement.videoWidth,
+        canvasHeight: videoElement.videoHeight,
+    });
+    
+    // Инициализация AR контекста
+    arToolkitContext.init(function() {
+        camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+    });
+    
+    // Создаем контролы для маркера
+    markerControls = new THREEx.ArMarkerControls(arToolkitContext, camera, {
+        type: 'pattern',
+        patternUrl: MARKER_PATTERN_URL,
+        changeMatrixMode: 'cameraTransformMatrix'
+    });
+    
     // Освещение
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -148,23 +230,20 @@ function initThreeJS() {
     scene.add(directionalLight);
     
     // Обработчики событий
-    window.addEventListener('resize', onWindowResize);
-    canvas.addEventListener('click', onCanvasClick);
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('wheel', onMouseWheel);
+    window.addEventListener('resize', onResize);
     
     // Начинаем анимацию
     animate();
+    
+    loadingElement.style.display = 'none';
+    infoElement.textContent = 'Наведите камеру на маркер';
 }
 
 // Загрузка GLB модели
 function loadGLBModel() {
     const loader = new THREE.GLTFLoader();
     
-    // Загружаем модель (пример URL - замените на свою модель)
-    // Можно использовать локальный файл или ссылку на GitHub
+    // Загружаем модель утки
     const modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb';
     
     loadingElement.style.display = 'block';
@@ -174,15 +253,19 @@ function loadGLBModel() {
         modelUrl,
         function(gltf) {
             model = gltf.scene;
-            model.scale.set(0.5, 0.5, 0.5);
-            model.visible = false; // Сначала скрываем
+            
+            // Настраиваем модель
+            model.scale.set(0.05, 0.05, 0.05);
+            model.rotation.y = Math.PI;
+            model.visible = false;
+            
+            // Добавляем модель в сцену
             scene.add(model);
             
             loadingElement.style.display = 'none';
             console.log('Модель загружена успешно');
         },
         function(xhr) {
-            // Прогресс загрузки
             const percent = Math.round((xhr.loaded / xhr.total) * 100);
             loadingElement.textContent = `Загрузка модели... ${percent}%`;
         },
@@ -194,98 +277,95 @@ function loadGLBModel() {
     );
 }
 
-// Размещение модели при клике
-function onCanvasClick(event) {
-    if (model && !modelPlaced) {
-        // Получаем координаты клика
-        const rect = canvas.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+// Обработка изменения размера окна
+function onResize() {
+    if (arToolkitSource) {
+        arToolkitSource.onResizeElement();
+        arToolkitSource.copyElementSizeTo(renderer.domElement);
         
-        // Размещаем модель перед камерой
-        model.position.set(x * 3, y * 2, -5);
-        model.visible = true;
-        modelPlaced = true;
-        infoElement.style.display = 'none';
+        if (arToolkitContext) {
+            arToolkitContext.arController !== null && 
+            arToolkitContext.arController.setProjectionMatrix();
+        }
     }
-}
-
-// Вращение модели мышкой
-function onMouseDown(event) {
-    if (!model || !modelPlaced) return;
-    
-    isDragging = true;
-    previousMousePosition = {
-        x: event.clientX,
-        y: event.clientY
-    };
-}
-
-function onMouseMove(event) {
-    if (!isDragging || !model) return;
-    
-    const deltaX = event.clientX - previousMousePosition.x;
-    const deltaY = event.clientY - previousMousePosition.y;
-    
-    model.rotation.y += deltaX * 0.01;
-    model.rotation.x += deltaY * 0.01;
-    
-    previousMousePosition = {
-        x: event.clientX,
-        y: event.clientY
-    };
-}
-
-function onMouseUp() {
-    isDragging = false;
-}
-
-function onMouseWheel(event) {
-    if (!model || !modelPlaced) return;
-    
-    event.preventDefault();
-    const zoomSpeed = 0.001;
-    model.scale.x += event.deltaY * zoomSpeed;
-    model.scale.y += event.deltaY * zoomSpeed;
-    model.scale.z += event.deltaY * zoomSpeed;
-    
-    // Ограничиваем масштаб
-    model.scale.x = Math.max(0.1, Math.min(2, model.scale.x));
-    model.scale.y = Math.max(0.1, Math.min(2, model.scale.y));
-    model.scale.z = Math.max(0.1, Math.min(2, model.scale.z));
-}
-
-function onWindowResize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
 }
 
 // Анимация
 function animate() {
     requestAnimationFrame(animate);
     
-    // Вращаем модель, если она размещена
-    if (model && modelPlaced && !isDragging) {
-        model.rotation.y += 0.005;
+    if (arToolkitSource && arToolkitSource.ready) {
+        arToolkitContext.update(arToolkitSource.domElement);
+        
+        // Обновляем видимость модели при обнаружении маркера
+        if (model) {
+            const markerVisible = markerControls.object3d.visible;
+            
+            if (markerVisible && !markerFound) {
+                // Маркер обнаружен
+                markerFound = true;
+                model.visible = true;
+                model.position.set(0, 0, 0);
+                model.rotation.y = Math.PI;
+                
+                markerInfoElement.textContent = 'Маркер обнаружен! Утка появилась.';
+                markerInfoElement.style.background = 'rgba(0, 255, 0, 0.7)';
+                
+            } else if (!markerVisible && markerFound) {
+                // Маркер потерян
+                markerFound = false;
+                model.visible = false;
+                
+                markerInfoElement.textContent = 'Маркер не обнаружен';
+                markerInfoElement.style.background = 'rgba(255, 0, 0, 0.7)';
+            }
+            
+            // Плавное вращение модели, когда маркер обнаружен
+            if (markerFound) {
+                model.rotation.y += 0.01;
+            }
+        }
     }
     
+    // Рендерим сцену
     renderer.render(scene, camera);
+}
+
+// Инструкция по созданию маркера
+function showMarkerInstructions() {
+    console.log('========================================');
+    console.log('ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ МАРКЕРА:');
+    console.log('========================================');
+    console.log('1. Распечатайте маркер с изображением:');
+    console.log('   ' + MARKER_IMAGE_URL);
+    console.log('2. Или откройте маркер на другом устройстве');
+    console.log('3. Наведите камеру на маркер');
+    console.log('4. Утка появится на маркере автоматически');
+    console.log('========================================');
+    console.log('Альтернативный маркер (mona.patt):');
+    console.log('https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/mona.png');
+    console.log('========================================');
 }
 
 // Назначаем обработчик кнопки
 startButton.addEventListener('click', startCamera);
 
-// Инструкция по использованию
-console.log('Инструкция:');
-console.log('1. Нажмите START CAMERA');
-console.log('2. Разрешите доступ к камере');
-console.log('3. Нажмите на экран, чтобы разместить модель');
-console.log('4. Перетаскивайте мышкой для вращения модели');
-console.log('5. Используйте колесико мыши для изменения масштаба');
+// Показываем инструкции при загрузке
+showMarkerInstructions();
+
+// Инструкция на странице
+infoElement.innerHTML = `
+    <strong>Инструкция:</strong><br>
+    1. Нажмите START AR CAMERA<br>
+    2. Разрешите доступ к камере<br>
+    3. Наведите камеру на маркер справа<br>
+    4. Утка появится автоматически
+`;
+
+markerInfoElement.innerHTML = `
+    <strong>Статус маркера:</strong><br>
+    Ожидание обнаружения...
+`;
 </script>
 
 </body>
