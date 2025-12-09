@@ -29,6 +29,9 @@
             color: white;
             font-size: 24px;
             z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
         }
         #startButton {
             position: absolute;
@@ -48,7 +51,7 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(255, 0, 0, 0.7);
             color: white;
             padding: 15px;
             border-radius: 10px;
@@ -67,7 +70,7 @@
             z-index: 100;
             display: none;
         }
-        canvas {
+        #canvas {
             position: absolute;
             top: 0;
             left: 0;
@@ -75,14 +78,14 @@
             height: 100%;
             z-index: 1;
         }
-        video {
+        #video {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             z-index: 0;
-            transform: scaleX(-1); /* Зеркальное отображение для фронтальной камеры */
+            object-fit: cover;
         }
     </style>
 </head>
@@ -92,7 +95,7 @@
 <div id="info">Наведите камеру на маркер</div>
 <div id="loading">Загрузка...</div>
 <div id="markerInfo">Маркер не обнаружен</div>
-<img id="markerImage" src="" alt="Маркер">
+<img id="markerImage" src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" alt="Маркер">
 
 <video id="video" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
@@ -100,17 +103,15 @@
 <!-- Подключаем необходимые библиотеки -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<!-- AR.js библиотека для работы с маркерами -->
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar.js"></script>
+<!-- Используем стабильную версию AR.js -->
+<script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.0/dist/ar.js"></script>
 
 <script>
 let camera, scene, renderer;
-let video, videoTexture;
+let video;
 let model = null;
-let markerControls = null;
 let arToolkitSource, arToolkitContext;
+let markerRoot = null;
 let markerFound = false;
 
 // Элементы DOM
@@ -122,9 +123,8 @@ const markerImageElement = document.getElementById('markerImage');
 const videoElement = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 
-// URL маркера (замените на свой)
-const MARKER_PATTERN_URL = './pattern-marker.patt';
-// URL изображения маркера для отображения
+// URL маркера (замените на свой) 
+const MARKER_PATTERN_URL = './pattern-marker.patt'; // URL изображения маркера для отображения 
 const MARKER_IMAGE_URL = './pattern-marker.patt';
 
 // Начало работы с AR камерой
@@ -132,7 +132,8 @@ async function startCamera() {
     try {
         startButton.style.display = 'none';
         loadingElement.style.display = 'block';
-        markerImageElement.src = MARKER_IMAGE_URL;
+        loadingElement.textContent = 'Инициализация камеры...';
+        
         markerImageElement.style.display = 'block';
         
         // Запрос доступа к камере
@@ -159,14 +160,17 @@ async function startCamera() {
         loadGLBModel();
         
     } catch(e) {
-        alert("Ошибка: " + e.name + " : " + e.message);
+        console.error("Ошибка камеры:", e);
+        alert("Ошибка доступа к камере: " + e.message);
         startButton.style.display = 'block';
         loadingElement.style.display = 'none';
     }
 }
 
-// Инициализация AR
+// Инициализация AR с использованием AR.js
 function initAR() {
+    loadingElement.textContent = 'Инициализация AR...';
+    
     // Создаем сцену
     scene = new THREE.Scene();
     
@@ -178,44 +182,49 @@ function initAR() {
     renderer = new THREE.WebGLRenderer({ 
         canvas: canvas,
         alpha: true,
-        antialias: true,
         antialias: true
     });
     renderer.setClearColor(new THREE.Color('lightgrey'), 0);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     
-    // Настройка AR источника
+    // Инициализируем AR.js
     arToolkitSource = new THREEx.ArToolkitSource({
         sourceType: 'webcam',
-        sourceWidth: videoElement.videoWidth,
-        sourceHeight: videoElement.videoHeight,
-        displayWidth: window.innerWidth,
-        displayHeight: window.innerHeight
     });
     
-    arToolkitSource.init(function() {
-        setTimeout(function() {
-            onResize();
-        }, 2000);
+    arToolkitSource.init(function onReady() {
+        // Копируем размеры элемента
+        arToolkitSource.onResize();
+        arToolkitSource.copyElementSizeTo(renderer.domElement);
+        
+        if (arToolkitContext) {
+            arToolkitContext.arController.copyElementSizeTo(renderer.domElement);
+        }
     });
     
-    // Настройка AR контекста
+    // Создаем AR контекст
     arToolkitContext = new THREEx.ArToolkitContext({
-        cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/three.js/examples/vendor/ar.js/data/camera_para.dat',
+        cameraParametersUrl: 'https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
         detectionMode: 'mono',
-        maxDetectionRate: 30,
-        canvasWidth: videoElement.videoWidth,
-        canvasHeight: videoElement.videoHeight,
+        patternRatio: 0.5,
+        maxDetectionRate: 60,
+        canvasWidth: 640,
+        canvasHeight: 480,
     });
     
-    // Инициализация AR контекста
+    // Инициализируем контекст
     arToolkitContext.init(function() {
+        // Копируем матрицу проекции
         camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
     });
     
+    // Создаем корневой объект для маркера
+    markerRoot = new THREE.Group();
+    scene.add(markerRoot);
+    
     // Создаем контролы для маркера
-    markerControls = new THREEx.ArMarkerControls(arToolkitContext, camera, {
+    const markerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
         type: 'pattern',
         patternUrl: MARKER_PATTERN_URL,
         changeMatrixMode: 'cameraTransformMatrix'
@@ -229,14 +238,19 @@ function initAR() {
     directionalLight.position.set(1, 1, 1);
     scene.add(directionalLight);
     
-    // Обработчики событий
-    window.addEventListener('resize', onResize);
+    // Обработчик изменения размера окна
+    window.addEventListener('resize', function() {
+        if (arToolkitSource) {
+            arToolkitSource.onResize();
+            arToolkitSource.copyElementSizeTo(renderer.domElement);
+        }
+        if (arToolkitContext) {
+            arToolkitContext.arController.copyElementSizeTo(renderer.domElement);
+        }
+    });
     
     // Начинаем анимацию
     animate();
-    
-    loadingElement.style.display = 'none';
-    infoElement.textContent = 'Наведите камеру на маркер';
 }
 
 // Загрузка GLB модели
@@ -246,7 +260,6 @@ function loadGLBModel() {
     // Загружаем модель утки
     const modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb';
     
-    loadingElement.style.display = 'block';
     loadingElement.textContent = 'Загрузка модели...';
     
     loader.load(
@@ -259,10 +272,15 @@ function loadGLBModel() {
             model.rotation.y = Math.PI;
             model.visible = false;
             
-            // Добавляем модель в сцену
-            scene.add(model);
+            // Добавляем модель к маркеру
+            if (markerRoot) {
+                markerRoot.add(model);
+            } else {
+                scene.add(model);
+            }
             
             loadingElement.style.display = 'none';
+            infoElement.textContent = 'Наведите камеру на маркер справа вверху';
             console.log('Модель загружена успешно');
         },
         function(xhr) {
@@ -272,57 +290,60 @@ function loadGLBModel() {
         function(error) {
             loadingElement.style.display = 'none';
             console.error('Ошибка загрузки модели:', error);
-            alert('Не удалось загрузить модель. Проверьте URL или используйте локальную модель.');
+            // Используем куб как запасной вариант
+            createFallbackModel();
         }
     );
 }
 
-// Обработка изменения размера окна
-function onResize() {
-    if (arToolkitSource) {
-        arToolkitSource.onResizeElement();
-        arToolkitSource.copyElementSizeTo(renderer.domElement);
-        
-        if (arToolkitContext) {
-            arToolkitContext.arController !== null && 
-            arToolkitContext.arController.setProjectionMatrix();
-        }
+// Создание запасной модели (если GLB не загрузится)
+function createFallbackModel() {
+    console.log('Создание запасной модели...');
+    
+    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const material = new THREE.MeshNormalMaterial();
+    model = new THREE.Mesh(geometry, material);
+    model.visible = false;
+    
+    if (markerRoot) {
+        markerRoot.add(model);
+    } else {
+        scene.add(model);
     }
+    
+    loadingElement.style.display = 'none';
+    infoElement.textContent = 'Наведите камеру на маркер справа вверху';
 }
 
 // Анимация
 function animate() {
     requestAnimationFrame(animate);
     
+    // Обновляем AR контекст
     if (arToolkitSource && arToolkitSource.ready) {
         arToolkitContext.update(arToolkitSource.domElement);
         
-        // Обновляем видимость модели при обнаружении маркера
-        if (model) {
-            const markerVisible = markerControls.object3d.visible;
+        // Проверяем видимость маркера
+        if (markerRoot) {
+            const wasFound = markerFound;
+            markerFound = markerRoot.visible;
             
-            if (markerVisible && !markerFound) {
-                // Маркер обнаружен
-                markerFound = true;
-                model.visible = true;
-                model.position.set(0, 0, 0);
-                model.rotation.y = Math.PI;
+            if (model) {
+                model.visible = markerFound;
                 
-                markerInfoElement.textContent = 'Маркер обнаружен! Утка появилась.';
-                markerInfoElement.style.background = 'rgba(0, 255, 0, 0.7)';
-                
-            } else if (!markerVisible && markerFound) {
-                // Маркер потерян
-                markerFound = false;
-                model.visible = false;
-                
-                markerInfoElement.textContent = 'Маркер не обнаружен';
-                markerInfoElement.style.background = 'rgba(255, 0, 0, 0.7)';
+                // Если маркер обнаружен, вращаем модель
+                if (markerFound) {
+                    model.rotation.y += 0.01;
+                }
             }
             
-            // Плавное вращение модели, когда маркер обнаружен
-            if (markerFound) {
-                model.rotation.y += 0.01;
+            // Обновляем информацию о статусе маркера
+            if (markerFound && !wasFound) {
+                markerInfoElement.textContent = '✅ Маркер обнаружен!';
+                markerInfoElement.style.background = 'rgba(0, 255, 0, 0.7)';
+            } else if (!markerFound && wasFound) {
+                markerInfoElement.textContent = '❌ Маркер не обнаружен';
+                markerInfoElement.style.background = 'rgba(255, 0, 0, 0.7)';
             }
         }
     }
@@ -331,27 +352,82 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// Инструкция по созданию маркера
-function showMarkerInstructions() {
-    console.log('========================================');
-    console.log('ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ МАРКЕРА:');
-    console.log('========================================');
-    console.log('1. Распечатайте маркер с изображением:');
-    console.log('   ' + MARKER_IMAGE_URL);
-    console.log('2. Или откройте маркер на другом устройстве');
-    console.log('3. Наведите камеру на маркер');
-    console.log('4. Утка появится на маркере автоматически');
-    console.log('========================================');
-    console.log('Альтернативный маркер (mona.patt):');
-    console.log('https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/mona.png');
-    console.log('========================================');
+// Альтернативная простая реализация (если AR.js не работает)
+function initSimpleAR() {
+    console.log('Используется упрощенная реализация AR');
+    
+    loadingElement.textContent = 'Инициализация упрощенного AR...';
+    
+    // Создаем сцену
+    scene = new THREE.Scene();
+    
+    // Создаем камеру
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 5);
+    
+    // Создаем рендерер
+    renderer = new THREE.WebGLRenderer({ 
+        canvas: canvas,
+        alpha: true,
+        antialias: true
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    
+    // Создаем видео текстуру
+    const videoTexture = new THREE.VideoTexture(videoElement);
+    videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+    videoTexture.format = THREE.RGBFormat;
+    
+    // Создаем плоскость для видео фона
+    const videoGeometry = new THREE.PlaneGeometry(16, 9);
+    const videoMaterial = new THREE.MeshBasicMaterial({ 
+        map: videoTexture,
+        side: THREE.DoubleSide 
+    });
+    const videoPlane = new THREE.Mesh(videoGeometry, videoMaterial);
+    videoPlane.position.z = -10;
+    scene.add(videoPlane);
+    
+    // Освещение
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(1, 1, 1);
+    scene.add(directionalLight);
+    
+    // Загружаем модель
+    loadGLBModel();
+    
+    // Обработчик изменения размера
+    window.addEventListener('resize', function() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    
+    // Анимация
+    function animateSimple() {
+        requestAnimationFrame(animateSimple);
+        
+        if (model) {
+            model.rotation.y += 0.01;
+        }
+        
+        renderer.render(scene, camera);
+    }
+    
+    animateSimple();
+    loadingElement.style.display = 'none';
+    infoElement.textContent = 'Упрощенный режим. Модель отображается в центре.';
+    markerInfoElement.textContent = '⚠️ Используется упрощенный режим (без отслеживания маркера)';
+    markerInfoElement.style.background = 'rgba(255, 165, 0, 0.7)';
 }
 
 // Назначаем обработчик кнопки
 startButton.addEventListener('click', startCamera);
-
-// Показываем инструкции при загрузке
-showMarkerInstructions();
 
 // Инструкция на странице
 infoElement.innerHTML = `
@@ -364,8 +440,12 @@ infoElement.innerHTML = `
 
 markerInfoElement.innerHTML = `
     <strong>Статус маркера:</strong><br>
-    Ожидание обнаружения...
+    Ожидание инициализации...
 `;
+
+// Проверяем доступность AR.js
+console.log('AR.js доступен:', typeof THREEx !== 'undefined');
+console.log('THREEx.ArToolkitSource доступен:', typeof THREEx?.ArToolkitSource !== 'undefined');
 </script>
 
 </body>
