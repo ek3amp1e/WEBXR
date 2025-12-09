@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>CAMERA TEST</h2>
+<button onclick="start()">START</button>
+
+<br><br>
+<video id="v" autoplay playsinline muted style="width:100%"></video>
+
+<script>
+async function start(){
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ideal:"environment"} }
+    })
+    v.srcObject = s
+    alert("✅ Камера работает")
+  }catch(e){
+    alert("❌ " + e.name + " : " + e.message)
+  }
+}
+</script>
+
+</body>
+</html>
