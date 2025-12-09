@@ -1,0 +1,81 @@
+# 1. Создайте простейшую страницу
+cat > index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AR Test - Use Chrome</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial; padding: 20px; text-align: center; }
+        .chrome-btn {
+            background: #4CAF50;
+            color: white;
+            padding: 20px 40px;
+            font-size: 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📱 Откройте в Chrome</h1>
+    <p>Safari не поддерживает AR на HTTP</p>
+    
+    <a href="googlechrome://192.168.1.96:8080/ar-simple.html" class="chrome-btn">
+        Открыть в Chrome
+    </a>
+    
+    <p>Если не сработало:</p>
+    <ol style="text-align: left; display: inline-block;">
+        <li>Скопируйте ссылку ниже</li>
+        <li>Откройте Chrome</li>
+        <li>Вставьте в адресную строку</li>
+    </ol>
+    
+    <p style="background: #f0f0f0; padding: 15px; border-radius: 10px; font-family: monospace;">
+        http://192.168.1.96:8080/ar-simple.html
+    </p>
+</body>
+</html>
+EOF
+
+# 2. Создайте простую AR страницу для Chrome
+cat > ar-simple.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AR in Chrome</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>body { margin: 0; }</style>
+</head>
+<body>
+    <a-scene embedded>
+        <a-box position="0 1 -2" color="red"></a-box>
+        <a-sphere position="1 1 -2" color="green"></a-sphere>
+        <a-cylinder position="-1 1 -2" color="blue"></a-cylinder>
+        <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="gray"></a-plane>
+        <a-sky color="#ECECEC"></a-sky>
+        <a-camera position="0 1.6 0"></a-camera>
+    </a-scene>
+    
+    <script>
+        // Просим доступ к камере сразу
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    console.log('Camera access granted');
+                    stream.getTracks().forEach(track => track.stop());
+                })
+                .catch(err => {
+                    console.log('Camera error:', err);
+                });
+        }
+    </script>
+</body>
+</html>
+EOF
+
+# 3. Запустите сервер
+python3 -m http.server 8080

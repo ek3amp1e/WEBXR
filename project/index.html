@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR приложение с 3D-моделями</title>
+    
+    <!-- Подключение A-Frame и компонентов AR -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <!-- Компоненты для интерактивности -->
+    <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 1000;
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            z-index: 1000;
+        }
+        
+        .control-btn {
+            padding: 10px 20px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .control-btn:hover {
+            background: #0056CC;
+        }
+        
+        .control-btn.active {
+            background: #FF3B30;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 20px;
+            z-index: 1000;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Пользовательский интерфейс -->
+    <div id="ui">
+        <h2>AR Просмотр 3D-моделей</h2>
+        <p id="instruction">Наведите камеру на маркер</p>
+    </div>
+    
+    <div id="controls">
+        <button class="control-btn" id="move-btn">Перемещение</button>
+        <button class="control-btn" id="rotate-btn">Вращение</button>
+        <button class="control-btn" id="scale-btn">Масштаб</button>
+        <button class="control-btn" id="reset-btn">Сброс</button>
+    </div>
+    
+    <div id="loading">Загрузка...</div>
+    
+    <!-- A-Frame сцена -->
+    <a-scene mindar-image="imageTargetSrc: assets/targets.mind; autoStart: false;" 
+             vr-mode-ui="enabled: false"
+             device-orientation-permission-ui="enabled: false"
+             loading-screen="dotsColor: white; backgroundColor: #333">
+        
+        <!-- Камера -->
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        
+        <!-- Источники света -->
+        <a-light type="ambient" color="#FFFFFF" intensity="0.6"></a-light>
+        <a-light type="directional" color="#FFFFFF" intensity="0.8" position="2 5 3"></a-light>
+        
+        <!-- AR маркер -->
+        <a-entity mindar-image-target="targetIndex: 0">
+            <!-- Контейнер для 3D-модели -->
+            <a-entity id="model-container"
+                      gltf-model="#model"
+                      position="0 0 0"
+                      scale="0.1 0.1 0.1"
+                      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000">
+            </a-entity>
+            
+            <!-- Интерактивная область -->
+            <a-ring id="interaction-ring"
+                    radius-inner="0.4"
+                    radius-outer="0.5"
+                    color="#007AFF"
+                    opacity="0.3"
+                    visible="false"
+                    position="0 1 0">
+            </a-ring>
+        </a-entity>
+        
+        <!-- Триггер звука при обнаружении маркера -->
+        <a-sound id="detection-sound" src="#detect-sound" autoplay="false"></a-sound>
+        
+        <!-- Звук при взаимодействии -->
+        <a-sound id="interaction-sound" src="#interact-sound" autoplay="false"></a-sound>
+    </a-scene>
+    
+    <!-- Аудио ресурсы -->
+    <audio id="detect-sound" src="assets/detected.mp3" preload="auto"></audio>
+    <audio id="interact-sound" src="assets/interact.mp3" preload="auto"></audio>
+    
+    <!-- 3D модель (в реальном проекте загружается через ассеты) -->
+    <script>
+        // В реальном проекте здесь будет загрузка модели
+        // Например: https://cdn.aframe.io/...
+    </script>
+    
+    <script src="js/app.js"></script>
+</body>
+</html>
