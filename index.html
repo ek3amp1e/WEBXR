@@ -1,29 +1,82 @@
 <!DOCTYPE html>
-<html>
-<body>
-
-<h2>CAMERA TEST</h2>
-<button onclick="start()">START</button>
-
-<br><br>
-<video id="v" autoplay playsinline muted style="width:100%"></video>
-
-<script>
-async function start(){
-  try{
-    const s = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ideal:"environment"} }
-    })
-    v.srcObject = s
-    alert("✅ Камера работает")
-  }catch(e){
-    alert("❌ " + e.name + " : " + e.message)
-  }
-}
-
-<script src="app.js"></script>
-<script src="scene.js"></script>
-
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>AR Web-приложение на A-Frame</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  
+  <!-- MindAR для AR с распознаванием маркера -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
+  
+  <!-- Включение пользовательского разрешения на камеру для iOS -->
+  <script>
+    AFRAME.registerComponent('request-camera-permission', {
+      init: function () {
+        if (AFRAME.utils.device.isIOS()) {
+          DeviceOrientationEvent.requestPermission().catch(() => {});
+        }
+      }
+    });
+  </script>
+</head>
+<body request-camera-permission>
+  
+  <!-- AR сцена -->
+  <a-scene mindar-image="imageTargetSrc: target.mind;" 
+           vr-mode-ui="enabled: false"
+           device-orientation-permission-ui="enabled: true"
+           color-space="sRGB"
+           embedded
+           renderer="antialias: true; colorManagement: true;">
+    
+    <!-- Активируем AR с помощью MindAR -->
+    <a-entity mindar-image-target="targetIndex: 0">
+      
+      <!-- 3D-модель -->
+      <a-gltf-model id="model" src="#myModel" position="0 0 0" rotation="0 0 0" scale="0.3 0.3 0.3"
+                    class="interactive">
+      </a-gltf-model>
+      
+    </a-entity>
+    
+    <!-- Свет -->
+    <a-entity light="type: ambient; color: #ffffff; intensity: 0.6"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 1" position="1 2 3"></a-entity>
+    
+    <!-- Подсказка -->
+    <a-text value="Наведи камеру на маркер" position="0 0.5 -1" color="#00FF00" scale="2 2 2"></a-text>
+    
+    <!-- Звуковая обратная связь -->
+    <a-sound id="successSound" src="sounds/success.mp3" autoplay="false"></a-sound>
+    
+  </a-scene>
+  
+  <!-- 3D-модель и ассеты -->
+  <a-assets>
+    <a-asset-item id="myModel" src="models/myModel.glb"></a-asset-item>
+  </a-assets>
+  
+  <!-- Скрипт интерактивности -->
+  <script>
+    const model = document.querySelector('#model');
+    
+    // При клике увеличиваем модель
+    model.addEventListener('click', () => {
+      model.object3D.scale.multiplyScalar(1.2);
+      document.querySelector('#successSound').components.sound.playSound();
+    });
+    
+    // Подсветка при наведении
+    model.addEventListener('mouseenter', () => {
+      model.setAttribute('material', 'color', '#FF0000');
+    });
+    model.addEventListener('mouseleave', () => {
+      model.setAttribute('material', 'color', '#FFFFFF');
+    });
+  </script>
+  
 </body>
 </html>
-
