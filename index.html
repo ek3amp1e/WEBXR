@@ -1,69 +1,29 @@
 <!DOCTYPE html>
 <html>
-<head>
-<meta charset="utf-8">
+<body>
 
-<meta name="viewport" content="width=device-width,user-scalable=no">
+<h2>CAMERA TEST</h2>
+<button onclick="start()">START</button>
 
-<!-- A-Frame -->
-<script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+<br><br>
+<video id="v" autoplay playsinline muted style="width:100%"></video>
 
-<!-- MindAR -->
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-</head>
-<body style="margin:0;overflow:hidden">
-
-<!-- Кнопка старта -->
-<button id="startAR" style="height:60px;width:100%;font-size:20px">
-START AR
-</button>
-
-<!-- Контроллер -->
-<div id="controls"
-style="display:none;
-position:absolute;
-bottom:10px;
-width:100%;
-z-index:10;
-text-align:center">
-
-<button id="move-btn">Move</button>
-<button id="rotate-btn">Rotate</button>
-<button id="scale-btn">Scale</button>
-<button id="reset-btn">Reset</button>
-
-</div>
-
-<!-- Сцена -->
-<a-scene
-id="ar-scene"
-mindar-image="imageTargetSrc: targets.mind; autoStart:false"
-embedded
-vr-mode-ui="enabled:false"
-device-orientation-permission-ui="enabled:false">
-
-<a-camera></a-camera>
-
-<a-entity
-id="model"
-mindar-image-target="targetIndex:0">
-
-<a-gltf-model
-src="model.glb"
-scale="0.1 0.1 0.1"
-position="0 0 0">
-</a-gltf-model>
-
-</a-entity>
-
-<a-sound id="detSound" src="detection.mp3"></a-sound>
-<a-sound id="clickSound" src="click.mp3"></a-sound>
-
-</a-scene>
+<script>
+async function start(){
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ideal:"environment"} }
+    })
+    v.srcObject = s
+    alert("✅ Камера работает")
+  }catch(e){
+    alert("❌ " + e.name + " : " + e.message)
+  }
+}
 
 <script src="app.js"></script>
 <script src="scene.js"></script>
 
 </body>
 </html>
+
