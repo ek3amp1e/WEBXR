@@ -2,46 +2,48 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>AR Duck on Marker</title>
+    <title>AR Duck Marker</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <style>
         body {
             margin: 0;
             overflow: hidden;
         }
-        #startButton {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            padding: 15px 30px;
-            font-size: 18px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            z-index: 10;
-            cursor: pointer;
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
         }
-        #info {
-            position: absolute;
-            bottom: 20px;
-            text-align: center;
-            width: 100%;
-            color: white;
-            font-size: 18px;
-            z-index: 10;
+
+        #startButton{
+            position:absolute;
+            z-index:10;
+            top:10px;
+            left:10px;
+            padding:10px 20px;
+            font-size:16px;
+            background:#4caf50;
+            border:0;
+            color:white;
+            border-radius:5px;
+            cursor:pointer;
         }
     </style>
 </head>
 <body>
 
 <button id="startButton">START AR</button>
-<div id="info">Наведите камеру на маркер</div>
 
-<!-- Three -->
+<!-- THREE -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
 
-<!-- AR.js -->
+<!-- AR.JS -->
 <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/three.js/build/ar-threex.js"></script>
 
 <script>
@@ -49,36 +51,50 @@ let scene, camera, renderer;
 let arToolkitSource, arToolkitContext;
 let markerRoot, duck;
 
-// ==================
-// Запуск камеры
-// ==================
-document.getElementById("startButton").addEventListener("click", startAR);
+document.getElementById("startButton").onclick = init;
 
-function startAR() {
+function init(){
+
     document.getElementById("startButton").style.display = "none";
 
+    // ─────────────────────────────────────────────
+    // SCENE
+    // ─────────────────────────────────────────────
     scene = new THREE.Scene();
 
     camera = new THREE.Camera();
     scene.add(camera);
 
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer = new THREE.WebGLRenderer({
+        antialias:true,
+        alpha:true
+    });
+
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+
     document.body.appendChild(renderer.domElement);
 
-    // Камера
+    // ─────────────────────────────────────────────
+    // CAMERA SOURCE
+    // ─────────────────────────────────────────────
     arToolkitSource = new THREEx.ArToolkitSource({
-        sourceType: 'webcam'
+        sourceType: 'webcam',
+        sourceWidth: window.innerWidth,
+        sourceHeight: window.innerHeight,
+        displayWidth: window.innerWidth,
+        displayHeight: window.innerHeight
     });
 
     arToolkitSource.init(() => {
-        onResize();
+        setTimeout(onResize,200);
     });
 
     window.addEventListener('resize', onResize);
 
-    // Контекст AR
+    // ─────────────────────────────────────────────
+    // AR TOOLKIT
+    // ─────────────────────────────────────────────
     arToolkitContext = new THREEx.ArToolkitContext({
         cameraParametersUrl:
             'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/camera_para.dat',
@@ -89,34 +105,37 @@ function startAR() {
         camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
     });
 
-    // ==================
-    // Маркер
-    // ==================
+    // ─────────────────────────────────────────────
+    // MARKER
+    // ─────────────────────────────────────────────
     markerRoot = new THREE.Group();
     scene.add(markerRoot);
 
     new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
         type: 'pattern',
         patternUrl:
-            'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/patt.hiro'
+          'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/patt.hiro',
+        changeMatrixMode: 'modelViewMatrix'
     });
 
-    // ==================
-    // Свет
-    // ==================
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-    dir.position.set(1, 1, 1);
-    scene.add(dir);
+    // ─────────────────────────────────────────────
+    // LIGHT
+    // ─────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff,0.6));
 
-    // ==================
-    // Загрузка утки
-    // ==================
+    const light = new THREE.DirectionalLight(0xffffff,0.8);
+    light.position.set(1,1,1);
+    scene.add(light);
+
+    // ─────────────────────────────────────────────
+    // LOAD DUCK
+    // ─────────────────────────────────────────────
     new THREE.GLTFLoader().load(
         'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-        gltf => {
+        gltf=>{
             duck = gltf.scene;
-            duck.scale.set(0.5, 0.5, 0.5);
+
+            duck.scale.set(0.5,0.5,0.5);
             duck.position.y = 0.5;
 
             markerRoot.add(duck);
@@ -126,30 +145,33 @@ function startAR() {
     animate();
 }
 
-function onResize() {
+
+// ─────────────────────────────────────────────
+function onResize(){
+    if (!arToolkitSource) return;
+
     arToolkitSource.onResize();
     arToolkitSource.copySizeTo(renderer.domElement);
-    if (arToolkitContext.arController) {
+
+    if (arToolkitContext && arToolkitContext.arController){
         arToolkitSource.copySizeTo(arToolkitContext.arController.canvas);
     }
 }
 
-// ==================
-// Цикл рендера
-// ==================
-function animate() {
+
+// ─────────────────────────────────────────────
+function animate(){
     requestAnimationFrame(animate);
 
-    if (!arToolkitSource.ready) return;
+    if (arToolkitSource.ready){
+        arToolkitContext.update(arToolkitSource.domElement);
+    }
 
-    arToolkitContext.update(arToolkitSource.domElement);
-
-    // Вращаем утку на маркере
-    if (duck) {
+    if (duck){
         duck.rotation.y += 0.01;
     }
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
 }
 </script>
 
