@@ -1,25 +1,304 @@
-new THREE.GLTFLoader().load(
-    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-    gltf=>{
-        duck = gltf.scene;
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AR Duck</title>
 
-        // Вычисляем bounding box модели
-        const bbox = new THREE.Box3().setFromObject(duck);
-        const size = new THREE.Vector3();
-        bbox.getSize(size);
-        const center = new THREE.Vector3();
-        bbox.getCenter(center);
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        // Смещаем модель так, чтобы центр модели был в (0, size.y/2, 0)
-        // т.е. модель ровно над плоскостью маркера
-        duck.position.x -= center.x;
-        duck.position.y -= bbox.min.y; // поднимаем так, чтобы нижняя часть была на 0
-        duck.position.z -= center.z;
+<style>
 
-        // Масштаб модели
-        duck.scale.set(0.5,0.5,0.5);
+body{
+    margin:0;
+    overflow:hidden;
+    background:black;
+    font-family: Arial, Helvetica, sans-serif;
+}
 
-        markerRoot.add(duck);
-        statusText.innerText = "Маркер найден ✅";
+/* CANVAS */
+canvas{
+    position:fixed;
+    top:0; left:0;
+    width:100vw !important;
+    height:100vh !important;
+}
+
+/* UI PANEL */
+
+#ui{
+    position:absolute;
+    top:12px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.55);
+    backdrop-filter: blur(10px);
+    padding:12px 20px;
+    border-radius:16px;
+    color:white;
+    z-index:10;
+    display:flex;
+    align-items:center;
+    gap:15px;
+}
+
+#startButton{
+    font-size:18px;
+    padding:10px 24px;
+    border-radius:12px;
+    border:0;
+    background:#41d15c;
+    color:white;
+    cursor:pointer;
+    transition:0.15s;
+}
+
+#startButton:hover{
+    transform: scale(1.05);
+    background:#2bb946;
+}
+
+#status{
+    font-size:14px;
+    opacity:0.9;
+}
+
+
+/* HELP TEXT */
+
+#info{
+    position:absolute;
+    bottom:16px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.55);
+    backdrop-filter: blur(6px);
+    color:white;
+    padding:10px 16px;
+    border-radius:14px;
+    font-size:14px;
+    z-index:10;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    <button id="startButton">START AR</button>
+    <div id="status">Нажмите кнопку для запуска</div>
+</div>
+
+<div id="info">
+    Наведите камеру на маркер HIRO<br>
+    Затем нажмите на утку, чтобы изменить цвет
+</div>
+
+
+<!-- THREE -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
+
+<!-- AR.JS -->
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/three.js/build/ar-threex.js"></script>
+
+<script>
+
+let scene, camera, renderer;
+let arToolkitSource, arToolkitContext;
+let markerRoot, duck;
+
+// ------ Touch click system ------
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+
+
+// COLORS FOR TAP
+const colors = [
+    0xffffff,
+    0xff5555,
+    0x55ff55,
+    0x5555ff,
+    0xffff55,
+    0xaa55ff
+];
+let colorIndex = 0;
+
+
+// UI
+const statusText = document.getElementById("status");
+document.getElementById("startButton").addEventListener("click", startAR);
+
+
+// ===============
+// START AR
+// ===============
+function startAR(){
+
+    document.getElementById("startButton").style.display = "none";
+    statusText.innerText = "Запуск камеры...";
+
+    scene = new THREE.Scene();
+
+    camera = new THREE.Camera();
+    scene.add(camera);
+
+    renderer = new THREE.WebGLRenderer({
+        alpha:true,
+        antialias:true
+    });
+
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+
+    // Camera source
+    arToolkitSource = new THREEx.ArToolkitSource({
+        sourceType:"webcam"
+    });
+
+    arToolkitSource.init(()=>{
+        onResize();
+        statusText.innerText = "Камера включена — ищем маркер...";
+    });
+
+    window.addEventListener("resize", onResize);
+
+
+    // AR Context
+    arToolkitContext = new THREEx.ArToolkitContext({
+        cameraParametersUrl:
+            'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/camera_para.dat',
+        detectionMode:'mono'
+    });
+
+    arToolkitContext.init(()=>{
+        camera.projectionMatrix.copy(
+            arToolkitContext.getProjectionMatrix()
+        );
+    });
+
+
+    // Marker
+    markerRoot = new THREE.Group();
+    scene.add(markerRoot);
+
+    new THREEx.ArMarkerControls(
+        arToolkitContext,
+        markerRoot,
+        {
+            type:'pattern',
+            patternUrl:
+              'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/patt.hiro'
+        }
+    );
+
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, .75));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(2,3,2);
+    scene.add(dir);
+
+
+    // Load Duck
+    new THREE.GLTFLoader().load(
+        'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
+        gltf=>{
+            duck = gltf.scene;
+
+            duck.scale.set(.5,.5,.5);
+            duck.position.set(0,0.5,0);
+
+            markerRoot.add(duck);
+
+            statusText.innerText = "Маркер найден ✅";
+        }
+    );
+
+
+    // Touch click
+    window.addEventListener("pointerdown", onTap);
+
+
+    animate();
+}
+
+
+
+function onResize(){
+    arToolkitSource.onResize();
+    arToolkitSource.copySizeTo(renderer.domElement);
+
+    if(arToolkitContext.arController){
+        arToolkitSource.copySizeTo(
+            arToolkitContext.arController.canvas
+        );
     }
-);
+}
+
+// ======================
+// TAP ON DUCK
+// ======================
+function onTap(event){
+
+    if(!duck) return;
+
+    // Преобразуем координаты тача/клика в нормализованные
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    // Смотрим пересечение с уткой
+    let intersects = raycaster.intersectObject(duck,true);
+
+    if(intersects.length > 0){
+
+        // Следующий цвет
+        colorIndex = (colorIndex + 1) % colors.length;
+
+        // Пробегаем по всем мешам и меняем цвет
+        duck.traverse(obj=>{
+            if(obj.isMesh){
+                if(Array.isArray(obj.material)){
+                    obj.material.forEach(mat=>{
+                        if(mat.color) mat.color.setHex(colors[colorIndex]);
+                    });
+                } else {
+                    if(obj.material.color) obj.material.color.setHex(colors[colorIndex]);
+                }
+            }
+        });
+
+    }
+}
+
+
+
+// =====================
+// Loop
+// =====================
+function animate(){
+
+    requestAnimationFrame(animate);
+
+    if(arToolkitSource.ready){
+
+        arToolkitContext.update(
+            arToolkitSource.domElement
+        );
+
+    }
+
+    if(duck)
+        duck.rotation.y += 0.01;
+
+    renderer.render(scene,camera);
+}
+
+</script>
+
+</body>
+</html>
