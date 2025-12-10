@@ -1,72 +1,68 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-<meta charset="utf-8">
-<title>AR Duck Marker — WORKING</title>
+<meta charset="UTF-8">
+<title>AR Duck Marker</title>
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-body{
-    margin:0;
-    background:#000;
-    font-family:Arial, Helvetica, sans-serif;
-}
-/* Canvas всегда поверх видео и во весь экран */
-canvas{
-    position:fixed;
-    inset:0;
-    width:100vw!important;
-    height:100vh!important;
-}
+    body{
+        margin:0;
+        background:black;
+        overflow:hidden;
+        font-family: Arial, Helvetica, sans-serif;
+    }
 
-/* Меню */
-#ui{
-    position:absolute;
-    top:15px;
-    left:50%;
-    transform:translateX(-50%);
-    z-index:10;
-    background:rgba(0,0,0,0.55);
-    backdrop-filter: blur(8px);
-    padding:12px 20px;
-    border-radius:14px;
-    display:flex;
-    gap:12px;
-    align-items:center;
-}
+    canvas{
+        position:fixed;
+        inset:0;
+        width:100vw !important;
+        height:100vh !important;
+    }
 
-button{
-    background:#4caf50;
-    border:0;
-    color:white;
-    font-size:15px;
-    padding:9px 16px;
-    border-radius:10px;
-    cursor:pointer;
-}
+    /* ---------- UI ---------- */
+    #ui{
+        position:absolute;
+        z-index:10;
+        top:12px;
+        left:50%;
+        transform:translateX(-50%);
+        background:rgba(0,0,0,0.6);
+        backdrop-filter: blur(10px);
+        border-radius:16px;
+        padding:10px 16px;
 
-button:hover{
-    background:#43a047;
-}
+        display:flex;
+        gap:8px;
+        align-items:center;
+        color:white;
+        font-size:14px;
+    }
 
-#status{
-    color:#fff;
-    font-size:14px;
-}
+    button{
+        background:#41c94d;
+        border:0;
+        border-radius:12px;
+        color:white;
+        padding:8px 14px;
+        cursor:pointer;
+    }
 
-#help{
-    position:absolute;
-    bottom:16px;
-    width:100%;
-    text-align:center;
-    color:#fff;
-    z-index:10;
-    font-size:14px;
-    background:rgba(0,0,0,0.5);
-    padding:8px 12px;
-}
+    #help{
+        position:absolute;
+        bottom:16px;
+        width:100%;
+        text-align:center;
+        color:white;
+        z-index:10;
+        background:rgba(0,0,0,0.5);
+        padding:6px 10px;
+        font-size:14px;
+    }
 </style>
 </head>
+
 <body>
 
 <div id="ui">
@@ -78,45 +74,45 @@ button:hover{
     Наведите камеру на маркер <b>HIRO</b>
 </div>
 
-<!-- THREE -->
+<!-- ---------- LIBRARIES ---------- -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
-
-<!-- AR.JS -->
 <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/build/ar-threex.js"></script>
 
 <script>
-let scene,camera,renderer;
+let scene, camera, renderer;
 let arSource, arContext;
 let markerRoot, duck;
-let statusLabel = document.getElementById("status");
 
-document.getElementById("startBtn").onclick = startAR;
+// UI
+const statusText = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
+
+startBtn.onclick = startAR;
 
 function startAR(){
-    document.getElementById("startBtn").style.display="none";
-    statusLabel.innerText = "Запуск камеры...";
 
+    startBtn.style.display = "none";
+    statusText.innerText = "Запуск камеры…";
+
+    // ---------- SCENE ----------
     scene = new THREE.Scene();
 
     camera = new THREE.Camera();
     scene.add(camera);
 
     renderer = new THREE.WebGLRenderer({
-        antialias:true,
-        alpha:true
+        alpha:true,
+        antialias:true
     });
 
-    renderer.setSize(window.innerWidth,window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-
-    /* =======================
-         VIDEO SOURCE
-    ======================== */
+    // ---------- VIDEO ----------
     arSource = new THREEx.ArToolkitSource({
-        sourceType: "webcam",
+        sourceType:'webcam',
         sourceWidth:1280,
         sourceHeight:720,
         displayWidth:window.innerWidth,
@@ -124,31 +120,29 @@ function startAR(){
     });
 
     arSource.init(()=>{
-        statusLabel.innerText = "Камера включена";
-        setTimeout(onResize,300);
+        setTimeout(onResize, 300);
+        statusText.innerText = "Инициализация AR…";
     });
 
     window.addEventListener("resize", onResize);
 
-    /* =======================
-         AR CONTEXT
-    ======================== */
+
+    // ---------- CONTEXT ----------
     arContext = new THREEx.ArToolkitContext({
+        detectionMode:'mono',
         cameraParametersUrl:
-            "https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/data/data/camera_para.dat",
-        detectionMode:"mono"
+          "https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/data/data/camera_para.dat"
     });
 
     arContext.init(()=>{
         camera.projectionMatrix.copy(
             arContext.getProjectionMatrix()
         );
-        statusLabel.innerText = "Поиск маркера...";
+        statusText.innerText="Ищем маркер…";
     });
 
-    /* =======================
-           MARKER
-    ======================== */
+
+    // ---------- MARKER ----------
     markerRoot = new THREE.Group();
     scene.add(markerRoot);
 
@@ -159,56 +153,76 @@ function startAR(){
             type:"pattern",
 
             patternUrl:
-            "https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/data/data/patt.hiro",
+              "https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/data/data/patt.hiro",
+
+            // ФИЗИЧЕСКИЙ РАЗМЕР МАРКЕРА (1 = метр)
+            size:1,
 
             smooth:true
         }
     );
 
-    /* =======================
-            LIGHT
-    ======================== */
-    scene.add(new THREE.AmbientLight(0xffffff,0.8));
+    // ---------- DEBUG: PLANE ----------
+    const markerPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(1,1),
+        new THREE.MeshBasicMaterial({
+            color:0x00ff00,
+            transparent:true,
+            opacity:0.2,
+            side:THREE.DoubleSide
+        })
+    );
+    markerPlane.rotation.x = -Math.PI/2;
+    markerRoot.add(markerPlane);
 
-    const dl = new THREE.DirectionalLight(0xffffff,0.7);
+    // ---------- LIGHT ----------
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+    const dl = new THREE.DirectionalLight(0xffffff,0.8);
     dl.position.set(2,2,1);
     scene.add(dl);
 
-    /* =======================
-            MODEL
-    ======================== */
+
+    // ---------- MODEL ----------
     const loader = new THREE.GLTFLoader();
 
     loader.load(
-        "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb",
+      "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb",
 
-        gltf=>{
-            duck = gltf.scene;
-            duck.scale.set(0.5,0.5,0.5);
-            duck.position.y = 0.5;
-            duck.visible = false;
+      gltf => {
+        duck = gltf.scene;
 
-            markerRoot.add(duck);
-        }
+        duck.scale.set(0.25,0.25,0.25);
+
+        // СТРОГО ПО ЦЕНТРУ МАРКЕРА
+        duck.position.set(0,0.02,0);
+
+        duck.visible = false;
+
+        markerRoot.add(duck);
+      }
     );
 
     animate();
 }
 
+
 function onResize(){
     if(!arSource) return;
 
     arSource.onResize();
+
     arSource.copySizeTo(renderer.domElement);
 
-    if(arContext.arController){
-        arSource.copySizeTo(arContext.arController.canvas);
+    if(arContext && arContext.arController){
+        arSource.copySizeTo(
+            arContext.arController.canvas
+        );
     }
 }
 
-/* =======================
-         LOOP
-======================= */
+
+// ---------- LOOP ----------
 function animate(){
     requestAnimationFrame(animate);
 
@@ -216,23 +230,27 @@ function animate(){
         arContext.update(arSource.domElement);
     }
 
+    // Логика показа модели
     if(markerRoot){
 
         if(markerRoot.visible){
-            statusLabel.innerText="Маркер найден ✅";
+            statusText.innerText = "Маркер найден ✅";
 
             if(duck){
                 duck.visible = true;
                 duck.rotation.y += 0.01;
             }
 
-        } else{
-            statusLabel.innerText="Ищем маркер...";
-            if(duck) duck.visible = false;
+        } else {
+
+            statusText.innerText = "Ищем маркер…";
+
+            if(duck)
+                duck.visible = false;
         }
     }
 
-    renderer.render(scene,camera);
+    renderer.render(scene, camera);
 }
 </script>
 
