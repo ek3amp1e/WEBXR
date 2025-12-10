@@ -245,29 +245,36 @@ function onTap(event){
 
     if(!duck) return;
 
+    // Преобразуем координаты тача/клика в нормализованные
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
 
+    // Смотрим пересечение с уткой
     let intersects = raycaster.intersectObject(duck,true);
 
     if(intersects.length > 0){
 
-        colorIndex++;
-        if(colorIndex >= colors.length)
-            colorIndex = 0;
+        // Следующий цвет
+        colorIndex = (colorIndex + 1) % colors.length;
 
+        // Пробегаем по всем мешам и меняем цвет
         duck.traverse(obj=>{
             if(obj.isMesh){
-                obj.material.color.setHex(
-                    colors[colorIndex]
-                );
+                if(Array.isArray(obj.material)){
+                    obj.material.forEach(mat=>{
+                        if(mat.color) mat.color.setHex(colors[colorIndex]);
+                    });
+                } else {
+                    if(obj.material.color) obj.material.color.setHex(colors[colorIndex]);
+                }
             }
         });
 
     }
 }
+
 
 
 // =====================
