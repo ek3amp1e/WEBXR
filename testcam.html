@@ -208,18 +208,20 @@ new THREE.GLTFLoader().load(
     gltf=>{
         duck = gltf.scene;
 
-        // Определяем размер модели
+        // Вычисляем bounding box модели
         const bbox = new THREE.Box3().setFromObject(duck);
         const size = new THREE.Vector3();
         bbox.getSize(size);
         const center = new THREE.Vector3();
         bbox.getCenter(center);
 
-        // Смещаем модель так, чтобы нижняя часть была на 0 (на маркере)
-        duck.position.sub(center);        // центр модели в 0,0,0
-        duck.position.y += size.y / 2;    // поднимаем на половину высоты
+        // Смещаем модель так, чтобы центр модели был в (0, size.y/2, 0)
+        // т.е. модель ровно над плоскостью маркера
+        duck.position.x -= center.x;
+        duck.position.y -= bbox.min.y; // поднимаем так, чтобы нижняя часть была на 0
+        duck.position.z -= center.z;
 
-        // Масштаб
+        // Масштаб модели
         duck.scale.set(0.5,0.5,0.5);
 
         markerRoot.add(duck);
