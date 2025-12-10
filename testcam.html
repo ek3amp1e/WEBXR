@@ -203,19 +203,29 @@ function startAR(){
 
 
     // Load Duck
-    new THREE.GLTFLoader().load(
-        'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-        gltf=>{
-            duck = gltf.scene;
+new THREE.GLTFLoader().load(
+    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
+    gltf=>{
+        duck = gltf.scene;
 
-            duck.scale.set(.5,.5,.5);
-            duck.position.set(0,0.5,0);
+        // Определяем размер модели
+        const bbox = new THREE.Box3().setFromObject(duck);
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        const center = new THREE.Vector3();
+        bbox.getCenter(center);
 
-            markerRoot.add(duck);
+        // Смещаем модель так, чтобы нижняя часть была на 0 (на маркере)
+        duck.position.sub(center);        // центр модели в 0,0,0
+        duck.position.y += size.y / 2;    // поднимаем на половину высоты
 
-            statusText.innerText = "Маркер найден ✅";
-        }
-    );
+        // Масштаб
+        duck.scale.set(0.5,0.5,0.5);
+
+        markerRoot.add(duck);
+        statusText.innerText = "Маркер найден ✅";
+    }
+);
 
 
     // Touch click
