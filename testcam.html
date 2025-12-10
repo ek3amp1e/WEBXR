@@ -3,41 +3,88 @@
 <head>
     <meta charset="utf-8">
     <title>AR Duck on Marker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             margin: 0;
             overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #000;
         }
-        #startButton {
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+
+        /* Панель UI сверху */
+        #ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            padding: 15px 30px;
-            font-size: 18px;
-            background: #4CAF50;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: 16px;
             color: white;
-            border: none;
-            border-radius: 5px;
             z-index: 10;
-            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
+
+        #startButton {
+            font-size: 18px;
+            padding: 10px 24px;
+            border-radius: 12px;
+            border: none;
+            background: #41d15c;
+            color: white;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+
+        #startButton:hover {
+            transform: scale(1.05);
+            background: #2bb946;
+        }
+
+        #status {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Подсказка внизу */
         #info {
             position: absolute;
-            bottom: 20px;
-            text-align: center;
-            width: 100%;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(6px);
             color: white;
-            font-size: 18px;
+            padding: 10px 16px;
+            border-radius: 14px;
+            font-size: 14px;
             z-index: 10;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-<button id="startButton">START AR</button>
+<div id="ui">
+    <button id="startButton">START AR</button>
+    <div id="status">Нажмите START для запуска камеры</div>
+</div>
+
 <div id="info">Наведите камеру на маркер</div>
 
-<!-- Three -->
+<!-- Three.js -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
 
@@ -56,6 +103,7 @@ document.getElementById("startButton").addEventListener("click", startAR);
 
 function startAR() {
     document.getElementById("startButton").style.display = "none";
+    document.getElementById("status").innerText = "Камера запущена, ищем маркер...";
 
     scene = new THREE.Scene();
 
