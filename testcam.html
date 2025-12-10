@@ -1,179 +1,202 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>AR Duck Marker</title>
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-        }
-
-        canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw !important;
-            height: 100vh !important;
-        }
-
-        #startButton{
-            position:absolute;
-            z-index:10;
-            top:10px;
-            left:10px;
-            padding:10px 20px;
-            font-size:16px;
-            background:#4caf50;
-            border:0;
-            color:white;
-            border-radius:5px;
-            cursor:pointer;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>AR Duck — improved marker detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; overflow:hidden; }
+    canvas { position:fixed; top:0; left:0; width:100vw !important; height:100vh !important; }
+    #startButton {
+      position:absolute; z-index:12; top:12px; left:12px;
+      padding:10px 16px; background:#4CAF50; color:#fff; border:0; border-radius:6px; cursor:pointer;
+    }
+    #info { position:absolute; bottom:12px; width:100%; text-align:center; color:#fff; z-index:12; }
+  </style>
 </head>
 <body>
 
 <button id="startButton">START AR</button>
+<div id="info">Наведите камеру на маркер Hiro</div>
 
-<!-- THREE -->
+<!-- three & loaders -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
 
-<!-- AR.JS -->
+<!-- AR.js (three.js build) -->
 <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/three.js/build/ar-threex.js"></script>
 
 <script>
 let scene, camera, renderer;
 let arToolkitSource, arToolkitContext;
-let markerRoot, duck;
+let markerRoot, smoothRoot, smoothControls;
+let duck = null;
 
-document.getElementById("startButton").onclick = init;
+// Счётчики видимости / таймауты для "жёсткой" логики распознавания
+let visibleCounter = 0;
+const VISIBLE_THRESHOLD = 5;      // сколько кадров подряд должно быть видно, чтобы показать модель
+let lastSeenTimestamp = 0;
+const LOST_GRACE_MS = 1200;       // период удержания модели при потере (мс)
+let modelShown = false;
 
-function init(){
+document.getElementById('startButton').addEventListener('click', start);
 
-    document.getElementById("startButton").style.display = "none";
+function start(){
+  document.getElementById('startButton').style.display = 'none';
 
-    // ─────────────────────────────────────────────
-    // SCENE
-    // ─────────────────────────────────────────────
-    scene = new THREE.Scene();
+  // Сцена и камера
+  scene = new THREE.Scene();
+  camera = new THREE.Camera();
+  scene.add(camera);
 
-    camera = new THREE.Camera();
-    scene.add(camera);
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
 
-    renderer = new THREE.WebGLRenderer({
-        antialias:true,
-        alpha:true
-    });
+  // Источник: увеличиваем исходное разрешение (лучше для стабильности распознавания)
+  arToolkitSource = new THREEx.ArToolkitSource({
+    sourceType: 'webcam',
+    // желательно 1280x720 (или 960x540 если нужно быстрее)
+    sourceWidth: 1280,
+    sourceHeight: 720,
+    displayWidth: window.innerWidth,
+    displayHeight: window.innerHeight
+  });
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+  arToolkitSource.init(() => {
+    // небольшая пауза — даём камере установиться
+    setTimeout(onResize, 200);
+  });
 
-    document.body.appendChild(renderer.domElement);
+  window.addEventListener('resize', onResize);
 
-    // ─────────────────────────────────────────────
-    // CAMERA SOURCE
-    // ─────────────────────────────────────────────
-    arToolkitSource = new THREEx.ArToolkitSource({
-        sourceType: 'webcam',
-        sourceWidth: window.innerWidth,
-        sourceHeight: window.innerHeight,
-        displayWidth: window.innerWidth,
-        displayHeight: window.innerHeight
-    });
+  // Контекст AR
+  arToolkitContext = new THREEx.ArToolkitContext({
+    cameraParametersUrl: 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/camera_para.dat',
+    detectionMode: 'mono',     // обычно 'mono' стабильнее для печатных паттернов
+    // Можно настроить дополнительные параметры в артконте (если потребуется)
+  });
 
-    arToolkitSource.init(() => {
-        setTimeout(onResize,200);
-    });
+  arToolkitContext.init(function(){
+    camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+  });
 
-    window.addEventListener('resize', onResize);
+  // Маркер корень (AR.js обновляет его трансформ когда видит паттерн)
+  markerRoot = new THREE.Group();
+  scene.add(markerRoot);
 
-    // ─────────────────────────────────────────────
-    // AR TOOLKIT
-    // ─────────────────────────────────────────────
-    arToolkitContext = new THREEx.ArToolkitContext({
-        cameraParametersUrl:
-            'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/camera_para.dat',
-        detectionMode: 'mono'
-    });
+  new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+    type: 'pattern',
+    patternUrl: 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/patt.hiro',
+    // changeMatrixMode: 'modelViewMatrix' // можно менять режим матрицы если нужно
+  });
 
-    arToolkitContext.init(() => {
-        camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
-    });
+  // Добавим "smooth root" — будем рендерить модель относительно сглаженного состояния маркера
+  smoothRoot = new THREE.Group();
+  markerRoot.add(smoothRoot);
 
-    // ─────────────────────────────────────────────
-    // MARKER
-    // ─────────────────────────────────────────────
-    markerRoot = new THREE.Group();
-    scene.add(markerRoot);
+  // ArSmoothedControls — сглаживание поворота/позы
+  // Параметры lerpPosition/lerpQuaternion регулируют "тяжесть" сглаживания
+  smoothControls = new THREEx.ArSmoothedControls(smoothRoot, {
+    lerpPosition: 0.45,
+    lerpQuaternion: 0.35,
+    lerpScale: 1.0
+  });
 
-    new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
-        type: 'pattern',
-        patternUrl:
-          'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/data/data/patt.hiro',
-        changeMatrixMode: 'modelViewMatrix'
-    });
+  // Свет
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(1,1,1);
+  scene.add(dir);
 
-    // ─────────────────────────────────────────────
-    // LIGHT
-    // ─────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff,0.6));
+  // Загрузка модели (утка)
+  const loader = new THREE.GLTFLoader();
+  loader.load(
+    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
+    gltf => {
+      duck = gltf.scene;
+      duck.scale.set(0.5,0.5,0.5);
+      // Ставим модель в smoothRoot (не в markerRoot напрямую)
+      duck.position.y = 0.5;
+      duck.visible = false; // будет показываться по логике ниже
+      smoothRoot.add(duck);
+      console.log('Duck loaded');
+    },
+    xhr => {
+      // прогресс (по желанию)
+    },
+    err => console.error(err)
+  );
 
-    const light = new THREE.DirectionalLight(0xffffff,0.8);
-    light.position.set(1,1,1);
-    scene.add(light);
-
-    // ─────────────────────────────────────────────
-    // LOAD DUCK
-    // ─────────────────────────────────────────────
-    new THREE.GLTFLoader().load(
-        'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-        gltf=>{
-            duck = gltf.scene;
-
-            duck.scale.set(0.5,0.5,0.5);
-            duck.position.y = 0.5;
-
-            markerRoot.add(duck);
-        }
-    );
-
-    animate();
+  animate();
 }
 
-
-// ─────────────────────────────────────────────
+// Обновление размеров
 function onResize(){
-    if (!arToolkitSource) return;
+  if (!arToolkitSource) return;
+  arToolkitSource.onResize();
+  arToolkitSource.copySizeTo(renderer.domElement);
 
-    arToolkitSource.onResize();
-    arToolkitSource.copySizeTo(renderer.domElement);
-
-    if (arToolkitContext && arToolkitContext.arController){
-        arToolkitSource.copySizeTo(arToolkitContext.arController.canvas);
-    }
+  if (arToolkitContext && arToolkitContext.arController) {
+    arToolkitSource.copySizeTo(arToolkitContext.arController.canvas);
+  }
 }
 
-
-// ─────────────────────────────────────────────
+// Анимация и логика распознавания
 function animate(){
-    requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    if (arToolkitSource.ready){
-        arToolkitContext.update(arToolkitSource.domElement);
+  if (!arToolkitSource) return;
+
+  if (arToolkitSource.ready) {
+    arToolkitContext.update(arToolkitSource.domElement);
+  }
+
+  // Обновляем сглаживание: передаём актуальную матрицу маркера в контрол
+  // Это делает позицию/вращение модели более плавным и уменьшает дрожание
+  if (smoothControls && markerRoot) {
+    smoothControls.update(markerRoot);
+  }
+
+  // Логика "показывать только если уверенно видно"
+  // markerRoot.visible автоматически ставится AR.js
+  if (markerRoot.visible) {
+    visibleCounter++;
+    lastSeenTimestamp = performance.now();
+
+    if (visibleCounter >= VISIBLE_THRESHOLD && duck && !modelShown) {
+      // показываем модель только когда маркер виден несколько кадров подряд
+      duck.visible = true;
+      modelShown = true;
+      console.log('Marker confirmed — show model');
     }
+  } else {
+    // маркер не виден в этом кадре
+    visibleCounter = 0;
 
-    if (duck){
-        duck.rotation.y += 0.01;
+    // если модель уже показана — удерживаем её на экране ещё немного (grace)
+    if (modelShown && (performance.now() - lastSeenTimestamp) < LOST_GRACE_MS) {
+      // ничего не делаем — держим модель видимой
+    } else {
+      // прошло время удержания или модель ещё не была показана — скрываем
+      if (duck) duck.visible = false;
+      modelShown = false;
     }
+  }
 
-    renderer.render(scene,camera);
+  // Небольшая постоянная анимация, только когда модель видимая
+  if (duck && duck.visible && !isUserDragging) {
+    duck.rotation.y += 0.01;
+  }
+
+  renderer.render(scene, camera);
 }
-</script>
 
+// (опционально) обработка пользовательского вращения/масштабирования — оставил заглушку,
+// если захочешь — добавлю перетаскивание/скейл аналогично предыдущему примеру
+let isUserDragging = false;
+
+</script>
 </body>
 </html>
